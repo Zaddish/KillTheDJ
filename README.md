@@ -1,6 +1,9 @@
 # KillTheDJ
 Automatically skip the Spotify DJ voice on windows.
 
+
+
+
 ## Overview
 Are you tired of Spotify's DJ voice interrupting your music? Look no further! **KillTheDJ** automatically detects when a Spotify DJ is about to speak and skips the track for you.
 
@@ -18,3 +21,8 @@ Feel free to submit pull requests or raise issues if you have suggestions for im
 
 ## Disclaimer
 This tool is not affiliated with or endorsed by Spotify.
+
+## Want to support me?
+Buy me a "Coffee"!
+
+<a href='https://www.youtube.com/watch?v=dQw4w9WgXcQ' target='_blank'><img height='35' style='border:0px;height:46px;' src='https://az743702.vo.msecnd.net/cdn/kofi3.png?v=0' border='0' alt='Buy Me a Coffee at ko-fi.com' />
