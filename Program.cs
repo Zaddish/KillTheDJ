@@ -44,10 +44,6 @@ namespace SpotifyAutomator {
                     string title = CheckSpotifyTitles(hWnd);
                     if (!string.IsNullOrEmpty(title) && (title.Contains("Spotify") || title.Contains("-"))) {
                         spotifyWindowHandles[hWnd] = title;
-                        if (title.Contains("DJ - Up next")) {
-                            Console.WriteLine("Fuck off DJ");
-                            SkipTrack();
-                        }
                     }
                 }
                 return true;
