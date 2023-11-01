@@ -1,104 +1,100 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System.Text;
-using System.Threading;
 
-namespace SpotifyAutomator
-{
-    class Program
-    {
-        const byte VK_MEDIA_NEXT_TRACK = 0xB0;
-        const byte KEYEVENTF_KEYUP = 0x02;
+namespace SpotifyAutomator {
+    class Program {
+        const int APPCOMMAND_MEDIA_NEXTTRACK = 11;
+        const int WM_APPCOMMAND = 0x0319;
+
+        [DllImport("user32.dll")]
+        public static extern IntPtr SendMessage(IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam);
 
         [DllImport("user32.dll")]
         private static extern bool EnumWindows(EnumWindowsProc enumProc, IntPtr lParam);
 
         [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
-        public static extern int GetWindowTextLength(IntPtr hWnd);
-
-        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
         public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
 
-        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        [DllImport("user32.dll")]
         public static extern int GetWindowThreadProcessId(IntPtr handle, out int processId);
-
-        [DllImport("user32.dll", SetLastError = true)]
-        public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, int dwExtraInfo);
 
         private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
+        private static HashSet<int> spotifyProcessIds = new HashSet<int>();
         private static Dictionary<IntPtr, string> spotifyWindowHandles = new Dictionary<IntPtr, string>();
+        static System.Threading.Timer handleUpdateTimer;
 
         static void Main(string[] args)
         {
             Console.OutputEncoding = Encoding.UTF8;
-            UpdateSpotifyHandles();
+            handleUpdateTimer = new System.Threading.Timer(UpdateSpotifyHandles, null, 0, 1000);
 
-            while (true)
-            {
-                CheckSpotifyTitles();
+            while (true) {
+                CheckSpotifyTitlesAndSkipTrackIfNeeded();
+                Thread.Sleep(1);
             }
         }
 
-        static void UpdateSpotifyHandles()
-        {
-            var spotifyProcesses = System.Diagnostics.Process.GetProcessesByName("Spotify");
-
-            EnumWindows((hWnd, lParam) =>
-            {
+        static void UpdateSpotifyHandles(object state) {
+            spotifyProcessIds = new HashSet<int>(System.Diagnostics.Process.GetProcessesByName("Spotify").Select(p => p.Id));
+            EnumWindows((hWnd, lParam) => {
                 GetWindowThreadProcessId(hWnd, out int processId);
 
-                foreach (var process in spotifyProcesses)
-                {
-                    if (process.Id == processId)
-                    {
-                        if (!spotifyWindowHandles.ContainsKey(hWnd))
-                        {
-                            spotifyWindowHandles[hWnd] = "";
+                if (spotifyProcessIds.Contains(processId)) {
+                    string title = CheckSpotifyTitles(hWnd);
+                    if (!string.IsNullOrEmpty(title) && (title.Contains("Spotify") || title.Contains("-"))) {
+                        spotifyWindowHandles[hWnd] = title;
+                        if (title.Contains("DJ - Up next")) {
+                            Console.WriteLine("Fuck off DJ");
+                            SkipTrack();
                         }
-                        break;
                     }
                 }
                 return true;
             }, IntPtr.Zero);
+
+            RemoveStaleHandles();
         }
 
-        static void CheckSpotifyTitles()
-        {
-            var handlesToRemove = new List<IntPtr>();
+        static string CheckSpotifyTitles(IntPtr hWnd) {
+            StringBuilder sb = new StringBuilder(512);
+            GetWindowText(hWnd, sb, sb.Capacity);
+            return sb.ToString();
+        }
 
-            foreach (var hWnd in spotifyWindowHandles.Keys)
-            {
-                StringBuilder sb = new StringBuilder(512);
-                GetWindowText(hWnd, sb, sb.Capacity);
-                string title = sb.ToString();
+        static void CheckSpotifyTitlesAndSkipTrackIfNeeded() {
+            foreach (var kvp in spotifyWindowHandles.ToList()) {
+                IntPtr hWnd = kvp.Key;
+                string title = CheckSpotifyTitles(hWnd);
 
-                if (title != spotifyWindowHandles[hWnd])
-                {
+                if (!string.IsNullOrEmpty(title) && title != kvp.Value) {
                     spotifyWindowHandles[hWnd] = title;
 
-                    if (title.Contains("-"))
-                    {
+                    if (title.Contains("-")) {
                         Console.WriteLine("Now playing: " + title);
                     }
 
-                    if (title.Contains("DJ - Up next"))
-                    {
+                    if (title.Contains("DJ - Up next")) {
                         Console.WriteLine("Fuck off DJ");
-                        keybd_event(VK_MEDIA_NEXT_TRACK, 0, 0, 0);
-                        keybd_event(VK_MEDIA_NEXT_TRACK, 0, KEYEVENTF_KEYUP, 0);
+                        SkipTrack();
                     }
                 }
-
-                if (string.IsNullOrEmpty(title))
-                {
-                    handlesToRemove.Add(hWnd);
-                }
             }
+        }
 
-            foreach (var hWnd in handlesToRemove)
-            {
+        static void SkipTrack() {
+            foreach (var hWnd in spotifyWindowHandles.Keys) {
+                SendMessage(hWnd, WM_APPCOMMAND, hWnd, new IntPtr(APPCOMMAND_MEDIA_NEXTTRACK << 16));
+                break;
+            }
+        }
+
+        static void RemoveStaleHandles() {
+            var handlesToRemove = spotifyWindowHandles.Keys
+                .Where(hWnd => string.IsNullOrEmpty(CheckSpotifyTitles(hWnd)))
+                .ToList();
+
+            foreach (var hWnd in handlesToRemove) {
                 spotifyWindowHandles.Remove(hWnd);
             }
         }
