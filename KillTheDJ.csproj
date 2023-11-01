@@ -21,7 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="..\..\..\Downloads\DJ_Killer.png">
+    <None Include="DJ_Killer.png">
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
     </None>
