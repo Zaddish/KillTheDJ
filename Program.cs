@@ -32,6 +32,7 @@ namespace SpotifyAutomator
 
         static void Main(string[] args)
         {
+            Console.OutputEncoding = Encoding.UTF8;
             UpdateSpotifyHandles();
 
             while (true)
