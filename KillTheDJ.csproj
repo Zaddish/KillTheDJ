@@ -16,7 +16,7 @@
     <RepositoryUrl>https://github.com/Zaddish/KillTheDJ</RepositoryUrl>
     <ApplicationIcon>DJ_Killer.ico</ApplicationIcon>
 	<RuntimeIdentifier>win-x64</RuntimeIdentifier>
-	<FileVersion>1.1.2</FileVersion>
+	<Version>1.1.3.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

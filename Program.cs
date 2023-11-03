@@ -1,6 +1,10 @@
 ﻿using System.Diagnostics;
+using System.Net.Http.Headers;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.Json;
+
 
 namespace SpotifyAutomator {
     static class Program {
@@ -11,6 +15,7 @@ namespace SpotifyAutomator {
         private const uint EVENT_OBJECT_NAMECHANGE = 0x800C;
         public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
+        static readonly HttpClient client = new HttpClient();
 
         [DllImport("user32.dll")]
         public static extern IntPtr SendMessage(IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam);
@@ -48,12 +53,17 @@ namespace SpotifyAutomator {
         const string playingFilePath = "playing.txt";
         private static AutoResetEvent stateChangedEvent = new AutoResetEvent(false);
 
-        static void Main(string[] args) {
+        public static async Task Main(string[] args) {
             Console.OutputEncoding = Encoding.UTF8;
             if (!File.Exists(playingFilePath)) {
                 File.Create(playingFilePath).Close();
             }
+            await CheckAndUpdateDJVersionAsync("https://api.github.com/repos/zaddish/killthedj/releases/latest");
+            StartDJKiller();
+            Console.ReadKey();
+        }
 
+        static void StartDJKiller() {
             Process[] spotifyProcesses = Process.GetProcessesByName("Spotify");
             if (spotifyProcesses.Length > 0) {
                 uint spotifyProcessId = (uint)spotifyProcesses[0].Id; // If it's not the first process get rekt bozo lol
@@ -83,8 +93,7 @@ namespace SpotifyAutomator {
             } else {
                 Console.WriteLine("Spotify is not running. Please open spotify before opening the DJ Killer");
                 Console.ReadKey();
-                AppDomain.CurrentDomain.ProcessExit += (s, e) =>
-                {
+                AppDomain.CurrentDomain.ProcessExit += (s, e) => {
                     stateChangedEvent.Set();
                     stateChangedEvent.Dispose();
                 };
@@ -160,11 +169,20 @@ namespace SpotifyAutomator {
                 _ => ""
             };
 
+            Console.ForegroundColor = currentState switch {
+                SpotifyState.Closed => ConsoleColor.Red,
+                SpotifyState.Paused => ConsoleColor.Yellow,
+                SpotifyState.Playing => ConsoleColor.Green,
+                SpotifyState.Resumed => ConsoleColor.Cyan,
+                _ => Console.ForegroundColor
+            };
+
             string status = !string.IsNullOrEmpty(statusPrefix) && (currentState == SpotifyState.Playing || currentState == SpotifyState.Resumed)
                             ? statusPrefix + currentlyPlayingTitle
                             : statusPrefix;
 
             Console.WriteLine(status);
+            Console.ResetColor();
 
             if (currentlyPlayingTitle != "DJ - Up next") {
                 if (currentState != SpotifyState.Paused && currentState != SpotifyState.Closed) {
@@ -173,6 +191,49 @@ namespace SpotifyAutomator {
                     File.WriteAllText(playingFilePath, "");
                 }
             }
+        }
+
+        private static async Task CheckAndUpdateDJVersionAsync(string apiUrl) {
+            Console.WriteLine("Checking for updates...");
+            string userAgentName = "Kill-The-DJ";
+            string assemblyVersion = Assembly.GetExecutingAssembly().GetName().Version.ToString();
+            void PrintDJStatus(string message) =>
+                Console.WriteLine($@"
+`.`.    `.`.     Kill The DJ
+  `.`.    `.`.    - Zaddish
+   .`.`    .`.`
+ .'.'    .'.'    v{assemblyVersion} {message}
+' '     ' '      
+");
+
+            try {
+                if (client.DefaultRequestHeaders.UserAgent.Count == 0) {
+                    client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue(userAgentName, assemblyVersion));
+                }
+
+                HttpResponseMessage response = await client.GetAsync(apiUrl);
+                response.EnsureSuccessStatusCode();
+                string responseBody = await response.Content.ReadAsStringAsync();
+
+                using (JsonDocument doc = JsonDocument.Parse(responseBody)) {
+                    JsonElement root = doc.RootElement;
+                    string releaseName = root.GetProperty("name").GetString();
+                    Version releaseVersion = new Version(releaseName);
+                    Version currentVersion = new Version(assemblyVersion);
+
+                    if (releaseVersion > currentVersion) {
+                        PrintDJStatus($"- You're out of date! Newest version is v{releaseName}");
+                        Console.WriteLine("Update to the latest version here: https://github.com/Zaddish/KillTheDJ/releases/");
+                    } else {
+                        PrintDJStatus("- latest");
+                    }
+                }
+            } catch (HttpRequestException e) {
+                PrintDJStatus($"- Error: {e.Message}");
+            } catch (Exception ex) {
+                PrintDJStatus($"- Unexpected Error: {ex.Message}");
+            }
+
         }
 
     }
