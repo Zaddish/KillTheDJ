@@ -17,6 +17,11 @@ namespace SpotifyAutomator {
 
         static readonly HttpClient client = new HttpClient();
 
+        private static string[] spinnerAnimationFrames;
+        private static Random random = new Random();
+        private static string pauseIcon = "⏸︎";
+        private static string closeIcon = "⏏︎";
+
         [DllImport("user32.dll")]
         public static extern IntPtr SendMessage(IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam);
         [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
@@ -55,6 +60,8 @@ namespace SpotifyAutomator {
 
         public static async Task Main(string[] args) {
             Console.OutputEncoding = Encoding.UTF8;
+            DateTime today = DateTime.Today;
+            spinnerAnimationFrames = EventSpinner(today);
             if (!File.Exists(playingFilePath)) {
                 File.Create(playingFilePath).Close();
             }
@@ -62,7 +69,30 @@ namespace SpotifyAutomator {
             StartDJKiller();
             Console.ReadKey();
         }
+       
 
+        private static string[] EventSpinner(DateTime date) {
+            // Event spinners based on date
+            switch (date.ToString("MM-dd")) {
+                case "12-25":
+                return new string[] { "🌲", "🎄" };
+                case "04-17":
+                return new string[] { "🐣", "🐇", "🌷", "🥚", "✝️", "🐥", "🌼", "🍫", "🕊️", "🐰" };
+                default:
+                string[][] spinners = new string[][] {
+                    new string[] { "⠁  ", "⠂  ", "⠄  ", "⡀  ", "⡈  ", "⡐  ", "⡠  ", "⣀  ", "⣁  ", "⣂  ", "⣄  ", "⣌  ", "⣔  ", "⣤  ", "⣥  ", "⣦  ", "⣮  ", "⣶  ", "⣷  ", "⣿  ", "⡿  ", "⠿  ", "⢟  ", "⠟  ", "⡛  ", "⠛  ", "⠫  ", "⢋  ", "⠋  ", "⠍  ", "⡉  ", "⠉  ", "⠑  ", "⠡  ", "⢁  "},
+                    new string[] { "⣼  ", "⣹  ", "⢻  ", "⠿  ", "⡟  ", "⣏  ", "⣧  ", "⣶  "},
+                    new string[] { "⠁  ", "⠂  ", "⠄  ", "⡀  ", "⢀  ", "⠠  ", "⠐  ", "⠈  "},
+                    new string[] { "⢄  ", "⢂  ", "⢁  ", "⡁  ", "⡈  ", "⡐  ", "⡠  "},
+                    new string[] { "⢹  ", "⢺  ", "⢼  ", "⣸  ", "⣇  ", "⡧  ", "⡗  ", "⡏  "},
+                    new string[] { "⠁  ", "⠁  ", "⠉  ", "⠙  ", "⠚  ", "⠒  ", "⠂  ", "⠂  ", "⠒  ", "⠲  ", "⠴  ", "⠤  ", "⠄  ", "⠄  ", "⠤  ", "⠠  ", "⠠  ", "⠤  ", "⠦  ", "⠖  ", "⠒  ", "⠐  ", "⠐  ", "⠒  ", "⠓  ", "⠋  ", "⠉  ", "⠈  ", "⠈  "},
+                    new string[] { "⠁  ", "⠉  ", "⠙  ", "⠚  ", "⠒  ", "⠂  ", "⠂  ", "⠒  ", "⠲  ", "⠴  ", "⠤  ", "⠄  ", "⠄  ", "⠤  ", "⠴  ", "⠲  ", "⠒  ", "⠂  ", "⠂  ", "⠒  ", "⠚  ", "⠙  ", "⠉  ", "⠁  "},
+                    new string[] { "⠋  ", "⠙  ", "⠚  ", "⠞  ", "⠖  ", "⠦  ", "⠴  ", "⠲  ", "⠳  ", "⠓  "}
+                };
+                int index = random.Next(spinners.Length);
+                return spinners[index];
+            }
+        }
         static void StartDJKiller() {
             Process[] spotifyProcesses = Process.GetProcessesByName("Spotify");
             if (spotifyProcesses.Length > 0) {
@@ -80,7 +110,7 @@ namespace SpotifyAutomator {
                                     processes = Process.GetProcessesByName("Spotify");
                                 } while (processes.Length == 0);
 
-                                Console.WriteLine("Spotify has reconnected, reinitializing...");
+                                Console.Write("Spotify has reconnected, reinitializing...");
                                 Main(new string[] { });
                             }
                         }
@@ -91,7 +121,7 @@ namespace SpotifyAutomator {
                 InitializeSpotifyState(spotifyProcessId);
                 Application.Run();
             } else {
-                Console.WriteLine("Spotify is not running. Please open spotify before opening the DJ Killer");
+                Console.Write("Spotify is not running. Please open spotify before opening the DJ Killer");
                 Console.ReadKey();
                 AppDomain.CurrentDomain.ProcessExit += (s, e) => {
                     stateChangedEvent.Set();
@@ -144,7 +174,6 @@ namespace SpotifyAutomator {
                     }
 
                     if (windowTitle.Contains("DJ - Up next")) {
-                        Console.WriteLine("Fuck off DJ");
                         SkipTrack(hwnd);
                     }
                 }
@@ -159,30 +188,39 @@ namespace SpotifyAutomator {
         static void SkipTrack(IntPtr hWnd) {
             SendMessage(hWnd, WM_APPCOMMAND, hWnd, new IntPtr(APPCOMMAND_MEDIA_NEXTTRACK << 16));
         }
+
+
+        private static CancellationTokenSource spinnerCancellationTokenSource;
         private static void OnStateChanged() {
+            spinnerCancellationTokenSource?.Cancel();
+            spinnerCancellationTokenSource = new CancellationTokenSource();
+
             stateChangedEvent.Set();
             string statusPrefix = currentState switch {
-                SpotifyState.Closed => "Spotify was disconnected...",
-                SpotifyState.Paused => "Music Paused",
+                SpotifyState.Closed => "Spotify was disconnected: ",
+                SpotifyState.Paused => "Music Paused: ",
                 SpotifyState.Playing => "Now Playing: ",
                 SpotifyState.Resumed => "Music Resumed: ",
                 _ => ""
             };
 
-            Console.ForegroundColor = currentState switch {
-                SpotifyState.Closed => ConsoleColor.Red,
-                SpotifyState.Paused => ConsoleColor.Yellow,
-                SpotifyState.Playing => ConsoleColor.Green,
-                SpotifyState.Resumed => ConsoleColor.Cyan,
-                _ => Console.ForegroundColor
-            };
+            string status = statusPrefix + currentlyPlayingTitle;
 
-            string status = !string.IsNullOrEmpty(statusPrefix) && (currentState == SpotifyState.Playing || currentState == SpotifyState.Resumed)
-                            ? statusPrefix + currentlyPlayingTitle
-                            : statusPrefix;
+            Console.Write("\r" + new string(' ', Console.WindowWidth));
+            Console.Write("\r");
 
-            Console.WriteLine(status);
-            Console.ResetColor();
+            switch (currentState) {
+                case SpotifyState.Playing:
+                case SpotifyState.Resumed:
+                Task.Run(() => AnimateSpinner(status, spinnerCancellationTokenSource.Token));
+                break;
+                case SpotifyState.Paused:
+                Console.Write($"{statusPrefix} {pauseIcon}");
+                break;
+                case SpotifyState.Closed:
+                Console.Write($"{statusPrefix} {closeIcon}");
+                break;
+            }
 
             if (currentlyPlayingTitle != "DJ - Up next") {
                 if (currentState != SpotifyState.Paused && currentState != SpotifyState.Closed) {
@@ -191,10 +229,16 @@ namespace SpotifyAutomator {
                     File.WriteAllText(playingFilePath, "");
                 }
             }
-        }
 
+            AppDomain.CurrentDomain.ProcessExit += (s, e) => {
+                spinnerCancellationTokenSource?.Cancel();
+                spinnerCancellationTokenSource?.Dispose();
+                stateChangedEvent.Set();
+                stateChangedEvent.Dispose();
+            };
+        }
         private static async Task CheckAndUpdateDJVersionAsync(string apiUrl) {
-            Console.WriteLine("Checking for updates...");
+            Console.Clear();
             string userAgentName = "Kill-The-DJ";
             string assemblyVersion = Assembly.GetExecutingAssembly().GetName().Version.ToString();
             void PrintDJStatus(string message) =>
@@ -235,6 +279,13 @@ namespace SpotifyAutomator {
             }
 
         }
-
+        private static void AnimateSpinner(string title, CancellationToken token) {
+            int animationFrame = 0;
+            while (!token.IsCancellationRequested) {
+                Console.Write($"\r{title} {spinnerAnimationFrames[animationFrame]}");
+                animationFrame = (animationFrame + 1) % spinnerAnimationFrames.Length;
+                Thread.Sleep(100);
+            }
+        }
     }
 }
