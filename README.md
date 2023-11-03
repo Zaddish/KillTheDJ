@@ -1,28 +1,35 @@
 # KillTheDJ
-Automatically skip the Spotify DJ voice on windows.
+KillTheDJ listens for changes in the window title of the Spotify process to determine the current state of music playback (playing, paused, resumed) and can perform actions like skipping tracks when certain conditions are met.
 
+## Features
+- Can detect when Spotify plays a new track, resumes a track, or pauses.
+- Has the capability to skip tracks automatically based on specified conditions.
+- Writes the current playing track to a text file for external use.
 
+## Dependencies
+- .NET Framework 6
+- Access to Spotify __desktop application__
 
-
-## Overview
-Are you tired of Spotify's DJ voice interrupting your music? Look no further! **KillTheDJ** automatically detects when a Spotify DJ is about to speak and skips the track for you.
-
-## How it works
-This program uses the Windows API to search for and interact with Spotify windows. It monitors the titles of these windows, which often change to reflect the currently playing track. When a track named "DJ - Up next" is detected, the program sends a "next track" media key press to skip it.
+## Setup
+1. Clone this repository to your local machine.
+2. Open the project in Visual Studio.
+3. Ensure .NET Framework is properly installed and configured.
+4. Build the solution to restore any NuGet packages if necessary and compile the code.
+5. Run the application - make sure Spotify is open before running this program.
 
 ## Usage
+Once the application is running, it will automatically start monitoring Spotify's playback state if Spotify is open. No user interaction is required.
 
-1. Clone the repository
-2. Build and run the project with `dotnet publish -r win-x64 -p:PublishSingleFile=true --self-contained false`
-3. Run the binary and keep it open while spotify is open / playing music.
+By default, when the title contains "DJ - Up next", the application will skip the track.
+
+The current playback status is logged to the console and written to a file named `playing.txt` in the application's running directory.
+
+## Limitations
+- This application is only compatible with Windows due to its reliance on the user32.dll for API calls.
+- It is designed to work with the Spotify desktop application, not the web player or mobile app.
 
 ## Contribution
 Feel free to submit pull requests or raise issues if you have suggestions for improvements or encounter any problems. This is largely untested, so I don't know how it will behave with MS store version of spotify, vs Desktop version etc.
 
 ## Disclaimer
-This tool is not affiliated with or endorsed by Spotify.
-
-## Want to support me?
-Buy me a "Coffee"!
-
-<a href='https://www.youtube.com/watch?v=dQw4w9WgXcQ' target='_blank'><img height='35' style='border:0px;height:46px;' src='https://az743702.vo.msecnd.net/cdn/kofi3.png?v=0' border='0' alt='Buy Me a Coffee at ko-fi.com' />
+This project is not affiliated with Spotify. It was created for educational purposes and personal use only. Please use responsibly.
