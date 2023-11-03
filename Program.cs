@@ -49,6 +49,7 @@ namespace SpotifyAutomator {
         private static AutoResetEvent stateChangedEvent = new AutoResetEvent(false);
 
         static void Main(string[] args) {
+            Console.OutputEncoding = Encoding.UTF8;
             if (!File.Exists(playingFilePath)) {
                 File.Create(playingFilePath).Close();
             }
