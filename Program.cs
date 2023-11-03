@@ -25,21 +25,34 @@ namespace SpotifyAutomator {
         [DllImport("user32.dll")]
         static extern bool UnhookWinEvent(IntPtr hWinEventHook);
 
-
-        private enum SpotifyState {
+        public enum SpotifyState {
             Paused,
             Playing,
             Resumed,
             Closed
         }
 
-        private static SpotifyState currentState = SpotifyState.Paused;
+        private static SpotifyState currentState;
+        public static SpotifyState _currentState {
+            get { return currentState; }
+            set {
+                currentState = value;
+                OnStateChanged();
+            }
+        }
         private static string lastPlayedTitle = "";
+        public static string currentlyPlayingTitle = "";
         private static Dictionary<IntPtr, string> spotifyWindowHandles = new Dictionary<IntPtr, string>();
         private static IntPtr m_hhook = IntPtr.Zero;
 
+        const string playingFilePath = "playing.txt";
+        private static AutoResetEvent stateChangedEvent = new AutoResetEvent(false);
+
         static void Main(string[] args) {
-            
+            if (!File.Exists(playingFilePath)) {
+                File.Create(playingFilePath).Close();
+            }
+
             Process[] spotifyProcesses = Process.GetProcessesByName("Spotify");
             if (spotifyProcesses.Length > 0) {
                 uint spotifyProcessId = (uint)spotifyProcesses[0].Id; // If it's not the first process get rekt bozo lol
@@ -47,17 +60,16 @@ namespace SpotifyAutomator {
                 if (process != null && process.ProcessName.Equals("Spotify", StringComparison.OrdinalIgnoreCase)) {
                     process.EnableRaisingEvents = true;
                     process.Exited += (sender, args) => {
-                        currentState = SpotifyState.Closed;
+                        _currentState = SpotifyState.Closed;
                         while (true) {
-                            if (currentState == SpotifyState.Closed) {
-                                Console.WriteLine("Spotify has been closed, waiting for it to restart...");
+                            if (_currentState == SpotifyState.Closed) {
                                 Process[] processes;
                                 do {
                                     Thread.Sleep(1000);
                                     processes = Process.GetProcessesByName("Spotify");
                                 } while (processes.Length == 0);
 
-                                Console.WriteLine("Spotify has restarted, reinitializing...");
+                                Console.WriteLine("Spotify has reconnected, reinitializing...");
                                 Main(new string[] { });
                             }
                         }
@@ -70,6 +82,11 @@ namespace SpotifyAutomator {
             } else {
                 Console.WriteLine("Spotify is not running. Please open spotify before opening the DJ Killer");
                 Console.ReadKey();
+                AppDomain.CurrentDomain.ProcessExit += (s, e) =>
+                {
+                    stateChangedEvent.Set();
+                    stateChangedEvent.Dispose();
+                };
                 Application.Exit();
             }
         }
@@ -84,8 +101,7 @@ namespace SpotifyAutomator {
                     if (!string.IsNullOrEmpty(windowTitle) && windowTitle.Contains("-")) {
                         spotifyWindowHandles[hWnd] = windowTitle;
                         lastPlayedTitle = windowTitle;
-                        currentState = SpotifyState.Playing;
-                        Console.WriteLine("Now Playing: " + windowTitle);
+                        _currentState = SpotifyState.Playing;
                     } else {
                         spotifyWindowHandles[hWnd] = windowTitle;
                     }
@@ -104,20 +120,17 @@ namespace SpotifyAutomator {
                     spotifyWindowHandles[hwnd] = windowTitle;
 
                     // Spotify resumed the same track
-                    if (windowTitle.Contains("-") && currentState == SpotifyState.Paused && windowTitle.Equals(lastPlayedTitle)) {
-                        currentState = SpotifyState.Resumed;
-                        Console.WriteLine("Music resumed: " + windowTitle);
+                    if (windowTitle.Contains("-") && _currentState == SpotifyState.Paused && windowTitle.Equals(lastPlayedTitle)) {
+                        _currentState = SpotifyState.Resumed;
                         return;
                     }
 
                     // Spotify is now playing a different track
                     if (windowTitle.Contains("-") && !windowTitle.Equals(oldTitle)) {
-                        currentState = SpotifyState.Playing;
+                        _currentState = SpotifyState.Playing;
                         lastPlayedTitle = windowTitle;
-                        Console.WriteLine("Now Playing: " + windowTitle);
-                    } else if (!windowTitle.Contains("-") && currentState != SpotifyState.Paused) {
-                        currentState = SpotifyState.Paused;
-                        Console.WriteLine("Music paused.");
+                    } else if (!windowTitle.Contains("-") && _currentState != SpotifyState.Paused) {
+                        _currentState = SpotifyState.Paused;
                     }
 
                     if (windowTitle.Contains("DJ - Up next")) {
@@ -130,10 +143,36 @@ namespace SpotifyAutomator {
         static string GetWindowTitle(IntPtr hWnd) {
             StringBuilder sb = new StringBuilder(512);
             GetWindowText(hWnd, sb, sb.Capacity);
+            currentlyPlayingTitle = sb.ToString();
             return sb.ToString();
         }
         static void SkipTrack(IntPtr hWnd) {
             SendMessage(hWnd, WM_APPCOMMAND, hWnd, new IntPtr(APPCOMMAND_MEDIA_NEXTTRACK << 16));
         }
+        private static void OnStateChanged() {
+            stateChangedEvent.Set();
+            string statusPrefix = currentState switch {
+                SpotifyState.Closed => "Spotify was disconnected...",
+                SpotifyState.Paused => "Music Paused",
+                SpotifyState.Playing => "Now Playing: ",
+                SpotifyState.Resumed => "Music Resumed: ",
+                _ => ""
+            };
+
+            string status = !string.IsNullOrEmpty(statusPrefix) && (currentState == SpotifyState.Playing || currentState == SpotifyState.Resumed)
+                            ? statusPrefix + currentlyPlayingTitle
+                            : statusPrefix;
+
+            Console.WriteLine(status);
+
+            if (currentlyPlayingTitle != "DJ - Up next") {
+                if (currentState != SpotifyState.Paused && currentState != SpotifyState.Closed) {
+                    File.WriteAllText(playingFilePath, currentlyPlayingTitle);
+                } else {
+                    File.WriteAllText(playingFilePath, "");
+                }
+            }
+        }
+
     }
 }
